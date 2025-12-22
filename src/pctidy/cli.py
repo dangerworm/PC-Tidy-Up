@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 from . import analyze
@@ -35,6 +36,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def run_scan(args: argparse.Namespace) -> int:
     try:
+        print(f"Scanning {args.source} ...", file=sys.stderr)
         scan = scan_tree(args.source, progress_every=args.progress_every)
     except (FileNotFoundError, NotADirectoryError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -43,9 +45,37 @@ def run_scan(args: argparse.Namespace) -> int:
     output_dir: Path = args.output
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Analyzing...", file=sys.stderr)
-    exact_dupes = analyze.find_exact_duplicates(scan.files)
-    near_dupes = analyze.find_near_duplicates(scan.files)
+    scan_duration = (scan.completed_at - scan.started_at).total_seconds()
+    print(
+        f"Scan complete: {len(scan.files)} files across {scan.total_directories} folders in {scan_duration:.1f}s",
+        file=sys.stderr,
+    )
+
+    def progress_bar(completed: int, total: int, width: int = 20) -> str:
+        if total <= 0:
+            return "-" * width
+        filled = min(width, int(width * completed / total))
+        return "#" * filled + "-" * (width - filled)
+
+    def progress_printer(stage: str):
+        def printer(done: int, total: int) -> None:
+            percent = (done / total * 100) if total else 0
+            bar = progress_bar(done, total)
+            print(f"[{stage}] {bar} {done}/{total} ({percent:.1f}%)", file=sys.stderr)
+
+        return printer
+
+    print("Analyzing duplicates (hashing exact matches)...", file=sys.stderr)
+    exact_start = time.perf_counter()
+    exact_dupes = analyze.find_exact_duplicates(scan.files, progress=progress_printer("exact"))
+    print(f"Exact duplicate analysis finished in {time.perf_counter() - exact_start:.1f}s", file=sys.stderr)
+
+    print("Analyzing near-duplicates (comparing names and sizes)...", file=sys.stderr)
+    near_start = time.perf_counter()
+    near_dupes = analyze.find_near_duplicates(scan.files, progress=progress_printer("near"))
+    print(f"Near-duplicate analysis finished in {time.perf_counter() - near_start:.1f}s", file=sys.stderr)
+
+    print("Evaluating folder merge candidates...", file=sys.stderr)
     folder_candidates = analyze.folder_merge_candidates(scan.files)
     largest_file_rows = analyze.largest_files(scan.files)
     largest_folder_rows = analyze.largest_folders(scan.directory_sizes)
