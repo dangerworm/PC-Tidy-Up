@@ -311,7 +311,12 @@ def describe_file(
             source_paths_count=1,
         )
 
-    markitdown_text = run_markitdown(path)
+    markitdown_text = None
+    try:
+        markitdown_text = run_markitdown(path)
+    except Exception as exc:  # pragma: no cover - defensive
+        error_messages.append(f"markitdown:{exc}")
+
     markitdown_lines = select_meaningful_lines(markitdown_text, min_lines, max_lines)
     if markitdown_lines:
         description_lines = markitdown_lines

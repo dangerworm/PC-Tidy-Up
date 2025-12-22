@@ -4,6 +4,7 @@ import csv
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -125,6 +126,20 @@ class DescribeTests(unittest.TestCase):
 
             self.assertEqual(reader[sha_text]["representative_path"], str(base / relative_text))
             self.assertEqual(reader[sha_text]["extraction_method"], "filemeta")
+
+    def test_markitdown_failures_are_captured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            path = base / "unsupported.dat"
+            path.write_text("content", encoding="utf-8")
+
+            sha = describer.sha256_digest(path)
+
+            with patch.object(describer, "run_markitdown", side_effect=ValueError("unsupported")):
+                row = describer.describe_file(sha, path)
+
+            self.assertIn("markitdown:unsupported", row.error)
+            self.assertEqual(row.description, "")
 
 
 if __name__ == "__main__":
