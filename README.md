@@ -26,3 +26,14 @@ pctidy scan /path/to/archive --output ./reports
 ```
 
 The command writes CSV reports into the `--output` directory. The source files are never modified.
+
+## pcdescribe companion tool
+
+Use `pcdescribe` to summarize the contents of exact duplicate groups produced by `pctidy`:
+
+```bash
+pcdescribe --dupes ./reports/exact_duplicates.csv --out ./reports/descriptions.csv
+```
+
+The command picks one representative path per unique SHA-256 hash, extracts concise descriptions and metadata, and writes a
+single CSV that can be joined back to the duplicate listings in Excel.

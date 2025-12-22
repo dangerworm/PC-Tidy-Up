@@ -9,6 +9,7 @@ license = {text = "MIT"}
 
 [project.scripts]
 pctidy = "pctidy.cli:main"
+pcdescribe = "pcdescribe.cli:main"
 
 [build-system]
 requires = ["setuptools>=64"]
