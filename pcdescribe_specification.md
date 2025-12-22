@@ -33,7 +33,7 @@ Its purpose is to **describe files once per unique content hash**, producing a s
 - If extraction fails, set error but continue.
 
 ## CLI
-python pcdescribe --dupes exact_duplicates.csv --out descriptions.csv [--ocr]
+pcdescribe --dupes exact_duplicates.csv --out descriptions.csv [--ocr]
 
 ## Implementation
 - Use pathlib, csv, dataclasses.
