@@ -21,6 +21,7 @@ class ArgumentError(Exception):
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Describe unique files from duplicate list")
+    parser.add_argument("--source", type=Path, help="Root directory that contains the duplicate paths")
     parser.add_argument("--dupes", type=Path, required=True, help="Path to exact_duplicates.csv")
     parser.add_argument("--out", type=Path, required=True, help="Output CSV for descriptions")
     parser.add_argument("--ocr", action="store_true", help="Enable OCR for likely images")
@@ -46,8 +47,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     min_lines, max_lines = determine_lines_config(args.min_lines, args.max_lines)
 
+    if args.source and not args.source.exists():
+        print(f"Error: source directory {args.source} does not exist", file=sys.stderr)
+        return 2
+    if args.source and not args.source.is_dir():
+        print(f"Error: source path {args.source} is not a directory", file=sys.stderr)
+        return 2
+
     try:
-        groups = load_duplicate_groups(args.dupes)
+        groups = load_duplicate_groups(args.dupes, source_root=args.source)
     except FileNotFoundError:
         print(f"Error: {args.dupes} not found", file=sys.stderr)
         return 2

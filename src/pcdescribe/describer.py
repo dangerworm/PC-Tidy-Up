@@ -44,7 +44,7 @@ PDF_EXTENSIONS = {".pdf"}
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".log", ".json", ".xml"}
 
 
-def load_duplicate_groups(dupes_csv: Path) -> list[DuplicateGroup]:
+def load_duplicate_groups(dupes_csv: Path, *, source_root: Path | None = None) -> list[DuplicateGroup]:
     with dupes_csv.open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         if "sha256" not in reader.fieldnames or "path" not in reader.fieldnames:
@@ -56,7 +56,10 @@ def load_duplicate_groups(dupes_csv: Path) -> list[DuplicateGroup]:
             if not sha or not path_value:
                 continue
             sha = sha.strip().lower()
-            groups.setdefault(sha, []).append(Path(path_value))
+            path_obj = Path(path_value)
+            if source_root and not path_obj.is_absolute():
+                path_obj = source_root / path_obj
+            groups.setdefault(sha, []).append(path_obj)
     return [DuplicateGroup(sha256=key, paths=sorted(paths, key=lambda p: str(p))) for key, paths in groups.items()]
 
 

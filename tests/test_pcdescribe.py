@@ -83,6 +83,49 @@ class DescribeTests(unittest.TestCase):
             self.assertEqual(records[sha_c]["representative_path"], str(file_c))
             self.assertEqual(records[sha_c]["source_paths_count"], "2")
 
+    def test_source_prefix_is_used_for_relative_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "docs").mkdir(parents=True, exist_ok=True)
+            (base / "photos").mkdir(parents=True, exist_ok=True)
+
+            relative_text = Path("docs/report.txt")
+            relative_image = Path("photos/image.txt")
+
+            (base / relative_text).write_text("Important doc line", encoding="utf-8")
+            (base / relative_image).write_text("Image placeholder", encoding="utf-8")
+
+            sha_text = describer.sha256_digest(base / relative_text)
+            sha_image = describer.sha256_digest(base / relative_image)
+
+            dupes_csv = base / "exact_duplicates.csv"
+            write_duplicates_csv(
+                dupes_csv,
+                [
+                    (1, relative_text, (base / relative_text).stat().st_size, sha_text),
+                    (2, relative_image, (base / relative_image).stat().st_size, sha_image),
+                ],
+            )
+
+            output_csv = base / "descriptions.csv"
+            exit_code = cli.main(
+                [
+                    "--source",
+                    str(base),
+                    "--dupes",
+                    str(dupes_csv),
+                    "--out",
+                    str(output_csv),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            with output_csv.open("r", encoding="utf-8", newline="") as handle:
+                reader = {row["sha256"]: row for row in csv.DictReader(handle)}
+
+            self.assertEqual(reader[sha_text]["representative_path"], str(base / relative_text))
+            self.assertEqual(reader[sha_text]["extraction_method"], "filemeta")
+
 
 if __name__ == "__main__":
     unittest.main()

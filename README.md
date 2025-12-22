@@ -32,8 +32,11 @@ The command writes CSV reports into the `--output` directory. The source files a
 Use `pcdescribe` to summarize the contents of exact duplicate groups produced by `pctidy`:
 
 ```bash
-pcdescribe --dupes ./reports/exact_duplicates.csv --out ./reports/descriptions.csv
+pcdescribe --source /path/to/archive --dupes ./reports/exact_duplicates.csv --out ./reports/descriptions.csv
 ```
+
+Pass `--source` when the `path` column in `exact_duplicates.csv` is relative; the value is prefixed to locate files for
+metadata and description extraction.
 
 The command picks one representative path per unique SHA-256 hash, extracts concise descriptions and metadata, and writes a
 single CSV that can be joined back to the duplicate listings in Excel.
