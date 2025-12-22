@@ -1,0 +1,15 @@
+[project]
+name = "pc-tidy-up"
+version = "0.1.0"
+description = "Read-only file analysis and reporting tool for organizing personal archives"
+authors = [{name = "PC Tidy Up"}]
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+[project.scripts]
+pctidy = "pctidy.cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
