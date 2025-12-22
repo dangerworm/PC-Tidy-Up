@@ -5,7 +5,7 @@ import itertools
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Callable, Dict, List, Sequence, Tuple
 from difflib import SequenceMatcher
 
 from .scan import FileRecord
@@ -55,13 +55,17 @@ class FolderMergeCandidate:
     jaccard: float
 
 
-def find_exact_duplicates(files: Sequence[FileRecord]) -> List[ExactDuplicate]:
+def find_exact_duplicates(
+    files: Sequence[FileRecord], progress: Callable[[int, int], None] | None = None, progress_every: int = 200
+) -> List[ExactDuplicate]:
     by_size: Dict[int, List[FileRecord]] = defaultdict(list)
     for record in files:
         by_size[record.size].append(record)
 
     duplicates: List[ExactDuplicate] = []
     group = 1
+    total_candidates = sum(len(records) for records in by_size.values() if len(records) > 1)
+    hashed = 0
     for size, records in sorted(by_size.items(), key=lambda item: item[0], reverse=True):
         if len(records) < 2:
             continue
@@ -69,6 +73,9 @@ def find_exact_duplicates(files: Sequence[FileRecord]) -> List[ExactDuplicate]:
         for record in records:
             digest = sha256_digest(record.path)
             digest_map[digest].append(record)
+            hashed += 1
+            if progress and hashed % progress_every == 0:
+                progress(hashed, total_candidates)
         for digest, digest_records in sorted(digest_map.items()):
             if len(digest_records) < 2:
                 continue
@@ -77,6 +84,8 @@ def find_exact_duplicates(files: Sequence[FileRecord]) -> List[ExactDuplicate]:
                     ExactDuplicate(group=group, path=record.relative_path, size=record.size, digest=digest)
                 )
             group += 1
+    if progress:
+        progress(total_candidates, total_candidates)
     return duplicates
 
 
@@ -84,12 +93,16 @@ def normalize_name(path: Path) -> str:
     return "".join(ch for ch in path.stem.lower() if ch.isalnum())
 
 
-def find_near_duplicates(files: Sequence[FileRecord]) -> List[NearDuplicate]:
+def find_near_duplicates(
+    files: Sequence[FileRecord], progress: Callable[[int, int], None] | None = None, progress_every: int = 500
+) -> List[NearDuplicate]:
     candidates: List[NearDuplicate] = []
     sorted_files = sorted(
         files, key=lambda record: (normalize_name(record.relative_path), record.size, str(record.relative_path))
     )
     group = 1
+    processed = 0
+    total = len(sorted_files)
     for _, group_records in itertools.groupby(sorted_files, key=lambda record: normalize_name(record.relative_path)):
         record_list = list(group_records)
         for i, base in enumerate(record_list):
@@ -109,6 +122,11 @@ def find_near_duplicates(files: Sequence[FileRecord]) -> List[NearDuplicate]:
                     )
             if any(c.group == group for c in candidates):
                 group += 1
+            processed += 1
+            if progress and processed % progress_every == 0:
+                progress(processed, total)
+    if progress:
+        progress(total, total)
     return candidates
 
 

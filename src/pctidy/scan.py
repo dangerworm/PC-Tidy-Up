@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,7 @@ def scan_tree(root: Path, progress_every: int = 500) -> ScanResult:
     files: List[FileRecord] = []
     errors: List[Tuple[Path, str]] = []
     started_at = datetime.now(timezone.utc)
+    started_clock = time.perf_counter()
     total_directories = 0
 
     for current_dir, _dirnames, filenames in os.walk(root):
@@ -55,7 +57,23 @@ def scan_tree(root: Path, progress_every: int = 500) -> ScanResult:
                 errors.append((full_path, str(exc)))
 
             if files and len(files) % progress_every == 0:
-                print(f"Scanned {len(files)} files...", file=sys.stderr)
+                elapsed = time.perf_counter() - started_clock
+                rate = len(files) / elapsed if elapsed else 0.0
+                eta = progress_every / rate if rate else 0.0
+                try:
+                    relative_dir = Path(current_dir).resolve().relative_to(root.resolve())
+                except ValueError:
+                    relative_dir = Path(current_dir)
+
+                progress_bar_length = 20
+                filled = int(progress_bar_length * (len(files) % (progress_every * progress_bar_length)) / (progress_every * progress_bar_length))
+                bar = "#" * filled + "-" * (progress_bar_length - filled)
+
+                print(
+                    f"[scan] {len(files)} files across {total_directories} folders | {bar} | "
+                    f"current: {relative_dir or '.'} | ~{rate:.1f} files/s | next update ~{eta:.1f}s",
+                    file=sys.stderr,
+                )
 
     directory_sizes: Dict[Path, int] = {}
     for record in files:
