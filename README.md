@@ -23,7 +23,7 @@ pip install -e .
 python -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
-pip install -e
+pip install -e .
 ```
 
 ## Usage

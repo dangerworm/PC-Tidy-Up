@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Sequence
 
 from .describer import (
     DEFAULT_PREFER,
@@ -42,6 +43,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     return parser.parse_args(argv)
 
+def choose_representative_file(paths: Sequence[Path], noise_words: Sequence[str], prefer_keywords: Sequence[str]) -> Path:
+    return min(paths, key=lambda p: (score_path(p, noise_words, prefer_keywords), len(str(p)), str(p)))
+
+def score_path(path: Path, noise_words: Sequence[str], prefer_keywords: Sequence[str]) -> int:
+    path_str = str(path).lower()
+    score = len(path_str)
+    for word in noise_words:
+        if word and word.lower() in path_str:
+            score += 25
+    for word in prefer_keywords:
+        if word and word.lower() in path_str:
+            score -= 5
+    return score
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
@@ -63,25 +77,32 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 
-    prefer_keywords = [word.strip() for word in args.prefer_path_keywords.split(",") if word.strip()]
     noise_words = [word.strip() for word in args.noise_words.split(",") if word.strip()]
+    prefer_keywords = [word.strip() for word in args.prefer_path_keywords.split(",") if word.strip()]
 
     total = len(groups)
     failures = 0
     rows = []
     for idx, group in enumerate(groups, start=1):
         try:
+            file_path = choose_representative_file(
+                group.paths, 
+                noise_words, 
+                prefer_keywords
+            )
+
             row = next(
                 process_duplicates(
-                    [group],
+                    sha256=group.sha256,
+                    file_path=file_path,
                     min_lines=min_lines,
                     max_lines=max_lines,
                     use_ocr=args.ocr,
                     ocr_always=args.ocr_always,
-                    noise_words=noise_words,
-                    prefer_keywords=prefer_keywords,
                 )
             )
+            row.source_paths_count = group.source_paths_count
+
         except Exception as exc:  # pragma: no cover - defensive
             failures += 1
             print(f"Failed processing {group.sha256}: {exc}", file=sys.stderr)

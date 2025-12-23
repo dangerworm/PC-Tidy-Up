@@ -34,6 +34,7 @@ class DescriptionRow:
 
 
 DEFAULT_PREFER = []
+MARKITDOWN_IGNORELIST = [".xls"]
 NOISE_WORDS = ["old computer", "prior", "backup", "copy", "onedrive", "deletions"]
 
 ARCHIVE_EXTENSIONS = {
@@ -55,8 +56,13 @@ BINARY_EXTENSIONS = {
     ".a",
 }
 CAD_GIS_EXTENSIONS = {
-    ".dwg", ".dwt", ".dwf", ".dxf",
-    ".shp", ".shx",
+    ".atc",
+    ".dwg",
+    ".dwt",
+    ".dwf",
+    ".dxf",
+    ".shp",
+    ".shx",
     ".sat",
     ".pc3",
     ".pat",
@@ -198,23 +204,6 @@ def load_duplicate_groups(dupes_csv: Path, *, source_root: Path | None = None) -
             groups.setdefault(sha, []).append(path_obj)
     return [DuplicateGroup(sha256=key, paths=sorted(paths, key=lambda p: str(p))) for key, paths in groups.items()]
 
-
-def score_path(path: Path, noise_words: Sequence[str], prefer_keywords: Sequence[str]) -> int:
-    path_str = str(path).lower()
-    score = len(path_str)
-    for word in noise_words:
-        if word and word.lower() in path_str:
-            score += 25
-    for word in prefer_keywords:
-        if word and word.lower() in path_str:
-            score -= 5
-    return score
-
-
-def choose_representative(paths: Sequence[Path], noise_words: Sequence[str], prefer_keywords: Sequence[str]) -> Path:
-    return min(paths, key=lambda p: (score_path(p, noise_words, prefer_keywords), len(str(p)), str(p)))
-
-
 def classify_file(path: Path) -> str:
     ext = path.suffix.lower()
     if ext in ARCHIVE_EXTENSIONS: return "archive"
@@ -272,7 +261,13 @@ def run_markitdown(path: Path) -> str | None:
         except:
             pass
 
-        return result.text_content if result else None
+        if not result:
+            return None
+
+        if len(result.text_content) > 50:
+            return result.text_content[:50]
+        
+        return result.text_content
     except Exception:
         return None
 
@@ -456,52 +451,87 @@ def describe_file(
         )
 
     markitdown_text = None
-    try:
-        markitdown_text = run_markitdown(path)
-    except Exception as exc:  # pragma: no cover - defensive
-        error_messages.append(f"markitdown:{exc}")
 
-    markitdown_lines = select_meaningful_lines(markitdown_text, min_lines, max_lines)
-    if markitdown_lines:
-        description_lines = markitdown_lines
-        extraction_tokens.append("markitdown")
+    if not extension in MARKITDOWN_IGNORELIST:
+        try:
+            markitdown_text = run_markitdown(path)
+        except Exception as exc:  # pragma: no cover - defensive
+            error_messages.append(f"markitdown:{exc}")
+
+        markitdown_lines = select_meaningful_lines(markitdown_text, min_lines, max_lines)
+        if markitdown_lines:
+            description_lines = markitdown_lines
+            extraction_tokens.append("markitdown")
 
     if not description_lines:
-        if file_type == "text":
-            text = read_text_file(path)
-            description_lines = select_meaningful_lines(text, min_lines, max_lines)
-        elif file_type == "word":
-            description, errors = extract_docx(path)
-            if errors:
-                error_messages.extend(errors)
-            description_lines = select_meaningful_lines(description, min_lines, max_lines)
-            if description_lines:
-                extraction_tokens.append("docx")
+        if file_type == "archive":
+            lines = "Zipped/packaged files"
+
+        elif file_type == "audio":
+            lines = "Audio file"
+
+        elif file_type == "binary":
+            lines = "Audio file"
+
+        elif file_type == "cad_gis":
+            lines = "CAD-related file"
+
+        elif file_type == "database":
+            lines = "Database file"
+
+        elif file_type == "document":
+            lines = "Non-processable document"
+
+        elif file_type == "email":
+            lines = "Email"
+
         elif file_type == "excel":
-            description, errors = extract_xlsx(path)
+            lines, errors = extract_xlsx(path)
             if errors:
                 error_messages.extend(errors)
-            description_lines = select_meaningful_lines(description, min_lines, max_lines)
-            if description_lines:
-                extraction_tokens.append("xlsx")
-        elif file_type == "pdf":
-            description, errors = extract_pdf(path)
-            if errors:
-                error_messages.extend(errors)
-            description_lines = select_meaningful_lines(description, min_lines, max_lines)
-            if description_lines:
-                extraction_tokens.append("pdf")
+
+        elif file_type == "font":
+            lines = "Font file"
+
         elif file_type == "image":
             _, errors = extract_image_exif(path)
             if errors:
                 extraction_tokens.append("exif")
                 metadata = ", ".join([metadata] + errors if metadata else errors)
-            ocr_text, ocr_errors = maybe_ocr(path, enabled=use_ocr or ocr_always, always=ocr_always)
+            lines, ocr_errors = maybe_ocr(path, enabled=use_ocr or ocr_always, always=ocr_always)
             if ocr_errors:
                 error_messages.extend(ocr_errors)
-            description_lines = select_meaningful_lines(ocr_text, min_lines, max_lines)
-            if description_lines:
-                extraction_tokens.append("ocr")
+        
+        elif file_type == "installer":
+            lines = "Executable file"
+
+        elif file_type == "pdf":
+            lines, errors = extract_pdf(path)
+            if errors:
+                error_messages.extend(errors)
+
+        elif file_type == "powerpoint":
+            lines = "Powerpoint"
+        
+        elif file_type == "temporary":
+            lines = "Temp file"
+
+        elif file_type == "text":
+            lines = read_text_file(path)
+            if len(lines) > 50:
+                lines = lines[:50]
+
+        elif file_type == "word":
+            lines, errors = extract_docx(path)
+            if errors:
+                error_messages.extend(errors)
+
+        else:
+            lines = "Unknown file type"
+
+        description_lines = select_meaningful_lines(lines, min_lines, max_lines)
+        if description_lines:
+            extraction_tokens.append(file_type)
 
     if not extraction_tokens:
         extraction_tokens.append("none")
@@ -520,28 +550,22 @@ def describe_file(
 
 
 def process_duplicates(
-    groups: Iterable[DuplicateGroup],
     *,
+    sha256: str,
+    file_path: Path,
     min_lines: int,
     max_lines: int,
     use_ocr: bool,
     ocr_always: bool,
-    noise_words: Sequence[str],
-    prefer_keywords: Sequence[str],
 ) -> Iterator[DescriptionRow]:
-    for group in groups:
-        representative = choose_representative(group.paths, noise_words, prefer_keywords)
-        row = describe_file(
-            group.sha256,
-            representative,
-            min_lines=min_lines,
-            max_lines=max_lines,
-            use_ocr=use_ocr,
-            ocr_always=ocr_always,
-        )
-        row.source_paths_count = group.source_paths_count
-        yield row
-
+    yield describe_file(
+        sha256,
+        file_path,
+        min_lines=min_lines,
+        max_lines=max_lines,
+        use_ocr=use_ocr,
+        ocr_always=ocr_always,
+    )
 
 def write_descriptions(path: Path, rows: Iterable[DescriptionRow]) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
