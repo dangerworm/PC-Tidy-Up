@@ -33,16 +33,152 @@ class DescriptionRow:
     source_paths_count: int
 
 
-NOISE_WORDS = ["old computer", "prior", "backup", "copy", "onedrive", "deletions"]
 DEFAULT_PREFER = []
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
-WORD_EXTENSIONS = {".docx"}
-POWERPOINT_EXTENSIONS = {".pptx"}
-EXCEL_EXTENSIONS = {".xlsx", ".xlsm"}
-PDF_EXTENSIONS = {".pdf"}
-TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".log", ".json", ".xml"}
+NOISE_WORDS = ["old computer", "prior", "backup", "copy", "onedrive", "deletions"]
 
+ARCHIVE_EXTENSIONS = {
+    ".zip",
+    ".cab",
+}
+AUDIO_EXTENSIONS = {
+    ".mp3",
+    ".m4a",
+    ".m4p",
+    ".mid",
+    ".wma",
+}
+BINARY_EXTENSIONS = {
+    ".dll",
+    ".ocx",
+    ".so",
+    ".o",
+    ".a",
+}
+CAD_GIS_EXTENSIONS = {
+    ".dwg", ".dwt", ".dwf", ".dxf",
+    ".shp", ".shx",
+    ".sat",
+    ".pc3",
+    ".pat",
+    ".ctb",
+    ".stb",
+}
+DATABASE_EXTENSIONS = {
+    ".db",
+    ".mdb",
+    ".dbx",
+    ".data",
+    ".dat",
+}
+DOCUMENT_EXTENSIONS = {
+    ".odt",
+    ".pub",
+    ".chm",
+    ".hlp",
+    ".mht",
+    ".htt",
+    ".man",
+    ".lrf",
+}
+EMAIL_EXTENSIONS = {
+    ".eml",
+}
+EXCEL_EXTENSIONS = {
+    ".xlsx",
+    ".xls",
+    ".xlsm",
+    ".xlt",
+    ".xla",
+    ".ods",
+    ".wks",
+    ".wdb",
+}
+FONT_EXTENSIONS = {
+    ".ttf",
+    ".fon",
+    ".pfb",
+    ".pfm",
+}
+IMAGE_EXTENSIONS = {
+    ".jpg", ".jpeg",
+    ".png",
+    ".tif", ".tiff",
+    ".bmp",
+    ".gif",
+    ".webp",
+    ".dib",
+    ".tga",
+    ".ico",
+    ".icns",
+}
+INSTALLER_EXTENSIONS = {
+    ".exe",
+    ".msi",
+}
+METADATA_EXTENSIONS = {".psd"}
+PDF_EXTENSIONS = {
+    ".pdf",
+}
+POWERPOINT_EXTENSIONS = {
+    ".pptx",
+    ".ppt",
+}
+TEMP_EXTENSIONS = {
+    ".tmp",
+    ".bak",
+    ".old",
+    ".download",
+    ".loaded_0",
+    ".local",
+}
+TEXT_EXTENSIONS = {
+    ".txt",
+    ".md",
+    ".log",
+    ".json",
+    ".xml",
+    ".csv",
+    ".ini",
+    ".cfg",
+    ".config",
+    ".inf",
+    ".manifest",
+    ".map",
+    ".mappings",
+    ".rul",
+    ".prj",
+    ".prp",
+    ".prv",
+    ".resx",
+    ".udl",
+    ".ics",
+    ".url",
+    ".plist",
+    ".php",
+    ".js",
+    ".css",
+    ".html",
+    ".htm",
+    ".xsl",
+    ".xmx",
+    ".aspx",
+}
+VIDEO_EXTENSIONS = {
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".flv",
+    ".dvb",
+    ".svf",
+    ".swf",
+}
+WORD_EXTENSIONS = {
+    ".docx",
+    ".doc",
+    ".rtf",
+}
+UNKNOWN_EXTENSIONS = set()
 
 def load_duplicate_groups(dupes_csv: Path, *, source_root: Path | None = None) -> list[DuplicateGroup]:
     with dupes_csv.open("r", newline="", encoding="utf-8") as handle:
@@ -81,20 +217,23 @@ def choose_representative(paths: Sequence[Path], noise_words: Sequence[str], pre
 
 def classify_file(path: Path) -> str:
     ext = path.suffix.lower()
-    if ext in WORD_EXTENSIONS:
-        return "word"
-    if ext in EXCEL_EXTENSIONS:
-        return "excel"
-    if ext in POWERPOINT_EXTENSIONS:
-        return "ppt"
-    if ext in PDF_EXTENSIONS:
-        return "pdf"
-    if ext in IMAGE_EXTENSIONS:
-        return "image"
-    if ext in VIDEO_EXTENSIONS:
-        return "video"
-    if ext in TEXT_EXTENSIONS:
-        return "text"
+    if ext in ARCHIVE_EXTENSIONS: return "archive"
+    if ext in AUDIO_EXTENSIONS: return "audio"
+    if ext in BINARY_EXTENSIONS: return "binary"
+    if ext in CAD_GIS_EXTENSIONS: return "cad_gis"
+    if ext in DATABASE_EXTENSIONS: return "database"
+    if ext in DOCUMENT_EXTENSIONS: return "document"
+    if ext in EMAIL_EXTENSIONS: return "email"
+    if ext in EXCEL_EXTENSIONS: return "excel"
+    if ext in FONT_EXTENSIONS: return "font"
+    if ext in IMAGE_EXTENSIONS: return "image"
+    if ext in INSTALLER_EXTENSIONS: return "installer"
+    if ext in PDF_EXTENSIONS: return "pdf"
+    if ext in POWERPOINT_EXTENSIONS: return "powerpoint"
+    if ext in TEMP_EXTENSIONS: return "temporary"
+    if ext in TEXT_EXTENSIONS: return "text"
+    if ext in VIDEO_EXTENSIONS: return "video"
+    if ext in WORD_EXTENSIONS: return "word"
     return "unknown"
 
 
@@ -124,13 +263,18 @@ def run_markitdown(path: Path) -> str | None:
         from markitdown import MarkItDown  # type: ignore
     except Exception:
         return None
+    
     try:
         markdowner = MarkItDown()
-        result = markdowner.convert(path)
+        result = None
+        try:
+            result = markdowner.convert(path)
+        except:
+            pass
+
         return result.text_content if result else None
     except Exception:
         return None
-
 
 def read_text_file(path: Path, limit: int = 20000) -> str | None:
     try:
@@ -449,6 +593,6 @@ def determine_lines_config(min_lines: int | None, max_lines: int | None) -> tupl
     return min_value, max_value
 
 
-def print_progress(current: int, total: int, failures: int) -> None:
+def print_progress(current: int, total: int, failures: int, filename: str) -> None:
     percent = (current / total * 100) if total else 0
-    print(f"[{current}/{total}] {percent:.1f}% done (failures: {failures})", file=sys.stderr)
+    print(f"[{current}/{total}] {percent:.1f}% done (failures: {failures}) {filename}", file=sys.stderr)

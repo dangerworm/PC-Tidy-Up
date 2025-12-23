@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Failed processing {group.sha256}: {exc}", file=sys.stderr)
             continue
         rows.append(row)
-        print_progress(idx, total, failures)
+        print_progress(idx, total, failures, group.paths[0])
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     write_descriptions(args.out, rows)
